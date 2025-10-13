@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UI;
 
 public class PlayerMovement : MonoBehaviour
 {
@@ -8,6 +9,7 @@ public class PlayerMovement : MonoBehaviour
     [Header("Player Health Settings")]
     [SerializeField] private int health;
     [SerializeField] private float damageRecoveryTime = 1f;
+    [SerializeField] private Slider healthSlider;
     private int currentHealth;
 
     [Header("Movement Settings")]
@@ -22,6 +24,17 @@ public class PlayerMovement : MonoBehaviour
     [Header("Jump Cooldown")]
     [SerializeField] private float jumpCooldown = 0.3f;
 
+    [Header("Knockback Settings")]
+    [SerializeField] private float knockbackForce = 10f;
+    [SerializeField] private float knockbackUpwardForce = 5f;
+    [SerializeField] private float knockbackDuration = 0.3f;
+    [SerializeField]
+    private AnimationCurve knockbackCurve = new AnimationCurve(
+        new Keyframe(0f, 1f),
+        new Keyframe(0.5f, 0.5f),
+        new Keyframe(1f, 0f)
+    );
+
     private Rigidbody2D rb;
     private Vector2 moveInput;
     private bool jumpInput;
@@ -33,7 +46,7 @@ public class PlayerMovement : MonoBehaviour
     private bool isFacingRight = true;
 
     private bool canTakeDamage = true;
-
+    private bool isKnockbackActive = false;
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -50,6 +63,7 @@ public class PlayerMovement : MonoBehaviour
         HandleJump();
         FlipSprite();
         UpdateAnimation();
+        UpdateHealthSlider();
     }
 
     private void FixedUpdate()
@@ -62,19 +76,108 @@ public class PlayerMovement : MonoBehaviour
             canJump = true;
         }
     }
+    /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="damageAmount"></param>
     #region System Health/Damage
-    public void TakeDamage(int damageAmount)
+    public void TakeDamage(int damageAmount, Vector2 damageSourcePosition)
     {
         canTakeDamage = false;
         currentHealth -= damageAmount;
         StartCoroutine(DamageRecoveryRoutine());
+        ApplyKnockback(damageSourcePosition);
+        UpdateHealthSlider();
     }
+    public void TakeDamage(int damageAmount, Transform damageSource)
+    {
+        TakeDamage(damageAmount, damageSource.position);
+    }
+    //private IEnumerator DamageRecoveryRoutine()
+    //{
+    //    yield return new WaitForSeconds(damageRecoveryTime);
+    //    canTakeDamage = true;
+    //}
+    private void UpdateHealthSlider()
+    {
+        if (healthSlider == null) return;
+        
+        healthSlider.maxValue = health;
+        healthSlider.value = currentHealth;
+    }
+
+    private void ApplyKnockback(Vector2 damageSourcePosition)
+    {
+        isKnockbackActive = true;
+
+        // Tính hướng knockback (đẩy ra xa khỏi damage source)
+        Vector2 knockbackDirection = (transform.position - (Vector3)damageSourcePosition).normalized;
+        knockbackDirection.y = Mathf.Clamp(knockbackDirection.y + 0.3f, 0.1f, 1f); // Thêm lực hướng lên
+
+        StartCoroutine(KnockbackRoutine(knockbackDirection));
+    }
+
+    private IEnumerator KnockbackRoutine(Vector2 direction)
+    {
+        float elapsedTime = 0f;
+        Vector2 startVelocity = rb.linearVelocity;
+
+        while (elapsedTime < knockbackDuration)
+        {
+            float curveValue = knockbackCurve.Evaluate(elapsedTime / knockbackDuration);
+
+            // Áp dụng knockback force với curve
+            Vector2 knockbackVelocity = direction * knockbackForce * curveValue;
+            knockbackVelocity.y += knockbackUpwardForce * curveValue;
+
+            rb.linearVelocity = new Vector2(knockbackVelocity.x, knockbackVelocity.y);
+
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        // Kết thúc knockback
+        isKnockbackActive = false;
+
+        // Reset velocity về 0 hoặc giữ lại vertical velocity nếu đang rơi
+        if (isGrounded)
+        {
+            rb.linearVelocity = new Vector2(0f, rb.linearVelocity.y);
+        }
+    }
+
     private IEnumerator DamageRecoveryRoutine()
     {
+        // Hiệu ứng nhấp nháy khi bất tử
+        SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null)
+        {
+            StartCoroutine(FlashEffect(spriteRenderer, damageRecoveryTime));
+        }
+
         yield return new WaitForSeconds(damageRecoveryTime);
         canTakeDamage = true;
     }
+
+    private IEnumerator FlashEffect(SpriteRenderer renderer, float duration)
+    {
+        float elapsedTime = 0f;
+        Color originalColor = renderer.color;
+
+        while (elapsedTime < duration)
+        {
+            // Nhấp nháy giữa màu đỏ và màu gốc
+            renderer.color = Mathf.PingPong(elapsedTime * 10f, 1f) > 0.5f ? Color.red : originalColor;
+            elapsedTime += Time.deltaTime;
+            yield return null;
+        }
+
+        renderer.color = originalColor;
+    }
     #endregion
+    /// <summary>
+    /// 
+    /// </summary>
     private void CheckGrounded()
     {
         isGrounded = Physics2D.OverlapCircle(groundCheck.position, groundCheckRadius, groundLayer);
@@ -156,6 +259,13 @@ public class PlayerMovement : MonoBehaviour
         {
             Gizmos.color = isGrounded ? Color.green : Color.red;
             Gizmos.DrawWireSphere(groundCheck.position, groundCheckRadius);
+        }
+    }
+    private void OnTriggerEnter2D(Collider2D collision)
+    {
+        if (collision.CompareTag("Enemy") )
+        {
+            TakeDamage(10, collision.transform);
         }
     }
 }
