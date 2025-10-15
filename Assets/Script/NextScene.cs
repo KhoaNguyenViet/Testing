@@ -19,7 +19,7 @@ public class NextScene : MonoBehaviour
     {
         if (collision.CompareTag("Player"))
         {
-            SceneManager.LoadScene("Scene2");
+            SceneManager.LoadScene("Level2");
         }
     }
 }

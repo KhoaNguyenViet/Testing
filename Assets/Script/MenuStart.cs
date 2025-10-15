@@ -5,6 +5,6 @@ public class MenuStart : MonoBehaviour
 {
    public void OnStartClick()
     {
-        SceneManager.LoadScene("SampleScene");
+        SceneManager.LoadScene("Level1");
     }
 }

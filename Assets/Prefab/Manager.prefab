@@ -45,8 +45,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   levelScenes:
-  - SampleScene
-  - Scene2
+  - Level1
+  - Level2
   mainMenuScene: MainMenu
   totalScoreScene: TotalScene
 --- !u!1 &4471147182487085857
